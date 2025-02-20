@@ -1,4 +1,5 @@
-analyzedata<-function(data_date,ESUsubset,ESU_DPS_list,cores=4,chains = 4,iter = 2000,warmup= 1000,thin = 1,control=list(adapt_delta=0.9995)){
+analyzedata<-function(data_date,ESUsubset,ESU_DPS_list,cores=4,chains = 4,iter = 2000,warmup= 1000,thin = 1,control=list(adapt_delta=0.8),version='original',exclude=NULL){
+  rstan_options("auto_write" = TRUE)
   if(length(ESUsubset)>0){
     ESU_DPSs<-data.frame(read.csv(paste("data/",ESU_DPS_list,sep="")))
     SubDir <- paste("results ", data_date,sep="")
@@ -6,11 +7,13 @@ analyzedata<-function(data_date,ESUsubset,ESU_DPS_list,cores=4,chains = 4,iter =
       dir.create(file.path(SubDir))
     }
     analysislist<-paste(ESUsubset,"_",data_date,".csv",sep="")
+    fits <- list()
     for(i in 1:length(analysislist)){
       #fit model to real data
       dat<-data.frame(read.csv(paste(SubDir,"/",analysislist[i],sep="")))
       #dat<-dat[dat$COMMON_POPULATION_NAME=="Coweeman River - late Coho salmon",]
       dat<-merge(dat,ESU_DPSs[,colnames(ESU_DPSs)%in%c("ESU_DPS_COMMONNAME","ESA.listing.year")],by.x = "ESU",by.y="ESU_DPS_COMMONNAME")
+      if(!is.null(exclude)) dat <- dat[!dat$COMMON_POPULATION_NAME %in% exclude,]
       pops<-length(unique(dat$COMMON_POPULATION_NAME))
       if(pops>1){
         stan.dat<-list(
@@ -23,9 +26,17 @@ analyzedata<-function(data_date,ESUsubset,ESU_DPS_list,cores=4,chains = 4,iter =
           N_obs=pmax(dat$NUMBER_OF_SPAWNERS,1),
           pop_obs=as.numeric(as.factor(dat$COMMON_POPULATION_NAME)),
           year_obs=dat$BROOD_YEAR-min(dat$BROOD_YEAR)+1,
-          N_0_med_prior = pmax(as.numeric(c(unlist(data.frame(dat%>%group_by(COMMON_POPULATION_NAME)%>%filter(BROOD_YEAR==min(BROOD_YEAR))%>%summarise(first(NUMBER_OF_SPAWNERS)))[,2]))),1)
+          N_0_med_prior = pmax(as.numeric(c(unlist(data.frame(dat%>%group_by(COMMON_POPULATION_NAME)%>%filter(BROOD_YEAR==min(BROOD_YEAR))%>%summarise(first(NUMBER_OF_SPAWNERS)))[,2]))),1),
+          interval_start = sapply(unique(dat$COMMON_POPULATION_NAME), \(x) min(dat$BROOD_YEAR[dat$COMMON_POPULATION_NAME == x]) - min(dat$BROOD_YEAR))
           )
-        model<-stan_model("models/model_mv_v3.stan")
+        if(version=='original') {
+          model<-stan_model("models/model_mv_v3.stan")
+        } else if(version=='optimized') {
+          model<-stan_model("models/model_mv_v3_optimized.stan")
+        } else if(version=='rcm') {
+          stan.dat$N_obs <- dat$NUMBER_OF_SPAWNERS
+          model<-stan_model("models/model_mv_rcm.stan")
+        }
       }
       if(pops==1){
         stan.dat<-list(
@@ -58,7 +69,7 @@ analyzedata<-function(data_date,ESUsubset,ESU_DPS_list,cores=4,chains = 4,iter =
       #parset<-c("sigma_rn","sigma_wn","slope")
       #pairs(stanfit,pars=parset)
       summary<-summary(stanfit)$summary
-      write.csv(summary,paste(SubDir,"/",ESUsubset[i],"_STAN_summary",data_date,".csv",sep=""))
+      write.csv(summary,paste(SubDir,"/",ESUsubset[i],"_STAN_summary",data_date,"_",version,"_exclude",exclude,".csv",sep=""))
       res<-rstan::extract(stanfit)
       if(pops>1){
         N_quants<-apply(res$N_all,2:3,function(x) quantile(x,c(0.025,0.25,0.5,0.75,0.975)))
@@ -92,8 +103,10 @@ analyzedata<-function(data_date,ESUsubset,ESU_DPS_list,cores=4,chains = 4,iter =
         dat3$COMMON_POPULATION_NAME<-unique(dat$COMMON_POPULATION_NAME)
         dat3$ESU<-ESUsubset[i]
       }
-      write.csv(dat2,paste(SubDir,"/",ESUsubset[i],"_",data_date,"_SmoothResults.csv",sep=""),row.names = F)
-      write.csv(dat3,paste(SubDir,"/",ESUsubset[i],"_",data_date,"_Slope.csv",sep=""),row.names = F)
+      write.csv(dat2,paste(SubDir,"/",ESUsubset[i],"_",data_date,"_",version,"_exclude",exclude,"_SmoothResults.csv",sep=""),row.names = F)
+      write.csv(dat3,paste(SubDir,"/",ESUsubset[i],"_",data_date,"_",version,"_exclude",exclude,"_Slope.csv",sep=""),row.names = F)
+      fits[[i]] <- stanfit
     }
   }
+  return(fits)
 }

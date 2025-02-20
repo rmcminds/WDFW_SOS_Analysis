@@ -1,19 +1,19 @@
 data{
-  int run_estimation;
-  int T;
+  int run_estimation; // whether or not to fit model to data
+  int T;              //
   int T_forward;
   int T_backward;
   int P;
   int n; 
-  vector[n] N_obs;
-  int pop_obs[n];
-  int year_obs[n];
+  vector[n] N_obs;    // number of observed spawners
+  array[n] int pop_obs;
+  array[n] int year_obs;
   vector<lower=0>[P] N_0_med_prior;
-  vector[P] x;//easting
-  vector[P] y;//northing
+  vector[P] x;        // easting
+  vector[P] y;        // northing
 }
 transformed data{
-  vector[P] Zero; //vector used for process error correlation matrix
+  vector[P] Zero; // vector used for process error correlation matrix
   row_vector[2] XY[P];
 	Zero = rep_vector(0,P);
   for (p in 1:P) {
@@ -42,7 +42,7 @@ transformed parameters{
   vector<lower=0>[P] sigma_rn = sigma_rn_mu + eps_sigma_rn * sigma_rn_sigma; 
   vector<lower=0>[P] sigma_wn = sigma_wn_mu + eps_sigma_wn * sigma_wn_sigma; 
   matrix[P,P] L_K;
-  matrix[P,P] K = cov_exp_quad(XY,alpha, rho);//alpha is same for all pops....hmmm
+  matrix[P,P] K = cov_exp_quad(XY, alpha, rho);//alpha is same for all pops....hmmm
   for (p in 1:P){
     K[p,p] = K[p,p] + square(sigma_rn[p]); //sigma_rn is nonspatial process error here
   }

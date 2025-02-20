@@ -95,7 +95,7 @@ Recovery_Goals<-"Recovery_Goals.csv"
 #set data date--this will name files and 
 #folders and tell the analysis code which 
 #date's data to use
-data_date = "2024-10-25"#Sys.Date()
+data_date = "2024-10-23"#Sys.Date()
 
 
 #========================================
@@ -216,7 +216,7 @@ dat<-prepare_SPi_data(data_date = data_date,
                 POPFIT_exceptions = POPFIT_exceptions, 
                 specialcaselist = specialcaselist,
                 databeforelisting= databeforelisting
-                )
+                ) ## RCM error because odbc not installed, then after installation error because no default driver
 
 ####update log (compare years,pops, data types this year vs. last)
 read_csv(here::here("year_pops.csv"))%>%
@@ -260,7 +260,7 @@ analyzedata(data_date=data_date,
                #,"Upper Columbia steelhead"
                #,"Snake River fall Chinook"
                #,"Puget Sound steelhead"
-               #,"Puget Sound Chinook"
+               "Puget Sound Chinook"
                #,"Ozette Lake sockeye"
                #,"Hood Canal summer chum"
                #,"Lower Columbia chum"
@@ -271,7 +271,8 @@ analyzedata(data_date=data_date,
             iter = 2000,
             warmup= 1000,
             thin = 1,
-            control=list(adapt_delta=0.95)
+            control=list(adapt_delta=0.95),
+            version='original' # 'original', 'optimized', or 'rcm'
             )
 
 #combine results output

@@ -1,5 +1,5 @@
 data{
-  int run_estimation; // do you want to run the model
+  int run_estimation;
   int T;
   int T_forward;
   int T_backward;
@@ -8,18 +8,14 @@ data{
   vector[n] N_obs;
   int pop_obs[n];
   int year_obs[n];
-  real<lower=0>N_0_med_prior[P];
-}
-transformed data{
-  vector[P] Zero; //vector used for process error correlation matrix
-	Zero = rep_vector(0,P);
+  vector<lower=0>[P] N_0_med_prior;
 }
 parameters{
   matrix[T-1,P] eps;
   vector[P] eps_slope;
   real slope_mu;
   real<lower=0> sigma_slope;
-  vector<lower=0>[P] N_0;
+  row_vector<lower=0>[P] N_0;
   real<lower=0> sigma_rn_mu;
   real<lower=0> sigma_wn_mu;
   real<lower=0> sigma_rn_sigma;
@@ -30,11 +26,12 @@ parameters{
 }
 transformed parameters{
   matrix<lower=0>[T,P] N;
-  vector<lower=0>[P] sigma_rn = sigma_rn_mu + eps_sigma_rn * sigma_rn_sigma; 
-  vector<lower=0>[P] sigma_wn = sigma_wn_mu + eps_sigma_wn * sigma_wn_sigma; 
-  N[1,1:P] = to_row_vector(N_0[1:P]);
+  vector<lower=0>[P] sigma_rn = sigma_rn_mu + eps_sigma_rn * sigma_rn_sigma; // process model std dev per pop
+  vector<lower=0>[P] sigma_wn = sigma_wn_mu + eps_sigma_wn * sigma_wn_sigma; // obs model std dev per pop
+  
+  N[1,] = N_0;
   for(t in 2:T){
-    N[t,1:P] = to_row_vector(exp(to_vector(log(N[t-1,1:P])) + slope_mu + eps_slope[1:P] * sigma_slope + diag_pre_multiply(sigma_rn,L) * to_vector(eps[t-1,1:P])));
+    N[t,] = N[t-1,] .* exp(slope_mu + sigma_slope * eps_slope + sigma_rn .* (L * eps[t-1,]'))'; // 
   }
 }
 model{
@@ -44,11 +41,13 @@ model{
     local_N[i] = N[year_obs[i],pop_obs[i]];
     local_sigma_wn[i] = sigma_wn[pop_obs[i]];
   }
-  //=========Priors================
-  //slope
-  slope_mu ~ normal(0,0.25); 
+  
+  // =========Priors================
+  // slope
+  slope_mu ~ student_t(5,0,0.25); 
   sigma_slope ~ cauchy(0,0.1);
-  eps_slope[1:P] ~ std_normal();
+  eps_slope[1:P] ~ student_t(5,0,1);
+  
   //observation  & process error sds
   sigma_rn_mu ~ inv_gamma(1,0.125); 
   sigma_wn_mu ~ inv_gamma(1,0.125);
@@ -56,15 +55,19 @@ model{
   sigma_wn_sigma ~ cauchy(0,0.1);
   eps_sigma_rn ~ cauchy(0,1);
   eps_sigma_wn ~ cauchy(0,1);
+  
   //correlation matrix
   L ~ lkj_corr_cholesky(1);
+  
   //process errors
   to_vector(eps) ~ std_normal();
+  
   //initial states
   N_0 ~ lognormal(log(N_0_med_prior),2);
+  
   //=========likelihood=============
   if(run_estimation==1){
-    N_obs ~ lognormal(log(local_N), local_sigma_wn);
+    log(N_obs) ~ student_t(5, log(local_N), local_sigma_wn); // add poisson? the 'observation error' seems redundant since there's only one observation per population per year, so the normal distribution for 'process error' has the same degrees of freedom
   }
 }
 generated quantities{
