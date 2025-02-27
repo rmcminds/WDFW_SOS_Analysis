@@ -79,7 +79,7 @@ model{
   to_vector(eps) ~ std_normal(); // raw params; do not correspond to specific pops
   
   // initial states
-  N_0 ~ lognormal(start_prior, 2 * sqrt(to_vector(interval_start)+1)); // what can we do to remove this? naive removal causes divergences; is there a way to easily marginalize them?
+  N_0 ~ lognormal(start_prior, 2 * sqrt(to_vector(interval_start)+1)); // what can we do to remove this? naive removal causes divergences; is there a way to easily marginalize them? maybe simply using better inits would do it?
   
   // observation error
   overdisp ~ student_t(nu[4], log(local_N), sqrt(tot_var * var_props[5] * (nu[4]-2)/nu[4]));
